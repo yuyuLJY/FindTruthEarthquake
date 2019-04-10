@@ -28,24 +28,84 @@ def getHTMLText(url):
     except:
         return "---------------无法连接---------------"
 
-def parsePage(ID,commentList,name,html):
+def parsePage(ID,commentList,name,zhuanfaList,likeList,argueList,html):
     print("调用parsePage")
     try:
+
+        #TODO 提取评论
         soup = BeautifulSoup(html, 'html.parser')
         for i in soup.findAll(name='div', attrs={'class': 'content', 'node-type': 'like'}):
-            divs = i('div')
-            print(i)
-            infoA = divs[0].find(name='a',attrs = {'target':'_blank'})
-            ID.append(infoA.attrs['href'])
-            name.append(infoA.attrs['nick-name'])
-            print("。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。")
             ps = i('p')[0]
             commentList.append(ps.get_text())
-            print(ps)
+            #TODO 解析是否含有地址
+            #print(ps)
+
+        #<div class="content" node-type="like">.*?<\\/div>
+        html = html.replace("\t", "").replace("\n", "").replace("\r", "").replace("\\", "")
+        print("区间长度："+str(len(re.findall(r'<div class="content" node-type="like">.*?<div node-type="feed_list_repeat">',html))))
+        #print(len(re.findall(r'<div class="content" node-type="like">.*?<div node-type="feed_list_repeat">',html)))
+        for i in re.findall(r'<div class="content" node-type="like">.*?<div node-type="feed_list_repeat">',html):
+            #TODO 提取id
+            #print(i)
+            #print("。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。")
+            id = re.findall(r'<a href="//weibo.com/.*?class="name"', i)[0].replace( '" class="name"','').replace('"','')
+            ID.append(id)
+            #print(id)
+
+            #TODO 提取Nickname
+            #.replace( 'class="name" target="_blank" nick-name="','')
+            nickname = re.findall(r'class="name" target="_blank" nick-name=".*?"', i)[0].replace( 'class="name" target="_blank" nick-name="','').replace('"','')
+            name.append(nickname)
+            #print(nickname)
+            # TODO 提取评论
+
+            #防止使用的是转发的评论、点赞、转发量
+            for j in re.findall(r'<div class="card-act">.*?</div>',i):
+                #print(j)
+                # TODO 提取赞
+                like_whole = re.findall(r'<li><a title="赞".*?</li>', j)[0]
+                like_number = re.findall(r'<em>[0-9]{1,}</em>', like_whole)
+                if like_number:
+                    like_number = re.findall(r'[0-9]{1,}', like_number[0])[0]
+                    print(like_number)
+                    likeList.append(like_number)
+                else:
+                    # print("点赞数0")
+                    likeList.append(0)
+                # print(like_whole)
+
+                # TODO 提取评论数量
+                argue_whole = re.findall(r'>评论.*?<', j)[0]  # > 转发 866<
+                argue_number = re.findall(r'[0-9]{1,}', argue_whole)
+                if argue_number:
+                    # print(argue_number[0])
+                    argueList.append(argue_number[0])
+                else:
+                    # print("评论量：0")
+                    argueList.append(0)
+
+                # TODO 提取转发量
+                zhuanfa_whole = re.findall(r'> 转发.*?<', j)[0]  # > 转发 866<
+                zhuanfa_number = re.findall(r'[0-9]{1,}', zhuanfa_whole)
+                if zhuanfa_number:
+                    # print(zhuanfa_number[0])
+                    zhuanfaList.append(zhuanfa_number[0])
+                else:
+                    # print("转发量：0")
+                    zhuanfaList.append(0)
+
+
+        print("转发数量："+str(len(zhuanfaList)))
+        print("评论数量：" + str(len(argueList)))
+        print("点赞数量：" + str(len(likeList)))
+        print("ID数量：" + str(len(ID)))
+        print("name数量：" + str(len(name)))
+        print("言论数量：" + str(len(commentList)))
+
     except:
         print("解析失败")
 
-def printComment(ID,commentList,name):
+def printComment(ID,commentList,name,zhuanfa,like,argueList):
     # -------------检测解析是否正确--------------------
     print("评论"+str(len(commentList)))
     print("ID" + str(len(ID)))
@@ -54,10 +114,13 @@ def printComment(ID,commentList,name):
     workbook = xlwt.Workbook()
     worksheet = workbook.add_sheet('#')
     for i in range(len(ID)):
-        worksheet.write(i, 0, name[i], style)  # Outputs 5
-        worksheet.write(i, 1, ID[i], style)  # Outputs 2
-        worksheet.write(i, 2, commentList[i], style)
-    workbook.save('E:/A大三下/大创/数据/topic_id.xlsx')
+        worksheet.write(i, 0, name[i], style)  # name
+        worksheet.write(i, 1, ID[i], style)  # id
+        worksheet.write(i, 2, commentList[i], style) #言论
+        worksheet.write(i, 3, zhuanfa[i], style)#转发数
+        worksheet.write(i, 4, argueList[i], style)#评论数
+        worksheet.write(i, 5, like[i], style)  # 点赞数
+    workbook.save('E:/A大三下/大创/数据/topic_id.xls')
 
 
 def main():
@@ -69,11 +132,14 @@ def main():
     commentList = []
     ID = []
     name = []
+    zhuanfa = []
+    like = []
+    argueList=[] #在言论下的评论数量
     #start_url = "https://s.weibo.com/weibo?q=%23%E5%BC%80%E5%B9%B4%E7%AC%AC%E4%B8%80%E5%89%81%20%E5%8F%A3%E7%BA%A2%E5%A7%A8%E5%A6%88%E5%B7%BE%23&nodup=1"
     start_url = "https://s.weibo.com/weibo/%25E5%258C%2597%25E4%25BA%25AC%25E5%259C%25B0%25E9%259C%2587?topnav=1&wvr=6&b=1&sudaref=s.weibo.com&display=0&retcode=6102"
     #start_url = "https://s.weibo.com/weibo/%25E5%258C%2597%25E4%25BA%25AC%25E5%259C%25B0%25E9%259C%2587?topnav=1&wvr=6&b=1"
 
-    for i in range(1, 10):
+    for i in range(1, 2):
         try:
             #地震的url，但是被replace
             #url = https://s.weibo.com/weibo?q=%E5%8C%97%E4%BA%AC%E5%9C%B0%E9%9C%87&wvr=6&b=1&Refer=SWeibo_box&page=6
@@ -82,12 +148,12 @@ def main():
             url =  start_url + '&page={}'.format(str(i))
             print(url)
             html = getHTMLText(url)
-            print(html)
-            parsePage(ID,commentList,name,html)
+            #print(html)
+            parsePage(ID,commentList,name,zhuanfa,like,argueList,html)
             print("name:"+str(name)+" ID:"+ID+" comment:"+commentList)
             #parsePage(commentList, html)
         except:
             continue
-    printComment(ID,commentList,name)
+    printComment(ID,commentList,name,zhuanfa,like,argueList)
 
 main()
